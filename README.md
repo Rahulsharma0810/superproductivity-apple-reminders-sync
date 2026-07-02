@@ -128,7 +128,7 @@ makes sense here stays here.)
 | `dueWithTime` (date **+ time**) | Due date (**date only**) | Outbound only. remi/Reminders store **no time-of-day** here — the time is dropped on the Apple side. Inbound never overwrites an existing SP time unless the **day** actually changed. |
 | Time **estimate** | `[estimate: 2h]` in notes | Two-way, if "Sync estimates" is on. |
 | Time **spent** | — | **SP-only.** No Reminders equivalent. |
-| Recurrence (repeat cfg) | Recurrence rule | **Outbound only, at create time** (`remi` can only set `--repeat` on `add`). Inbound recurring reminders become a **plain task + `[repeats: <rule>]` note** plus a one-time hint — see limitations. |
+| Recurrence (repeat cfg) | Recurrence rule | **Outbound, at create time.** `remi` fully supports recurrence, but its CLI only accepts `--repeat` on `add` (not `update`), so the rule is set when the reminder is first created and changing it later isn't pushed. Inbound recurring reminders become a **plain task + `[repeats: <rule>]` note** plus a one-time hint — see limitations. |
 | First tag | Section | If "Sync tags as sections" is on. Needs Full Disk Access. Inbound sections become/join a tag of the same name. |
 | Links / URLs | (in notes) | Kept inside the notes body. |
 | Priority | — | Ignored. SP tasks have no first-class priority field; outbound priority is always `none`, inbound priority is ignored (to avoid tag pollution). |
@@ -153,9 +153,13 @@ notes back into SP):
 - **No time-of-day on the Apple side.** Reminders due dates are date-only here;
   an SP due *time* is not represented in Apple. (SP keeps its own time; the
   plugin only touches SP's due when the **day** differs.)
-- **Inbound recurrence can't be recreated in SP.** The plugin API has no way to
-  create a repeat configuration, so a recurring Apple reminder is imported as a
-  normal task with a `[repeats: …]` note and a one-time suggestion to set up
+- **Recurrence is one-way and set at creation.** `remi` itself fully supports
+  recurring reminders, so a repeating SP task **is** created as a repeating Apple
+  reminder. The limits are: (1) `remi`'s CLI only accepts `--repeat` on `add`, so
+  editing an SP task's recurrence afterward isn't pushed to an existing reminder;
+  and (2) the SuperProductivity **plugin API has no way to create a repeat
+  configuration**, so a recurring Apple reminder coming *back* into SP is imported
+  as a normal task with a `[repeats: …]` note and a one-time suggestion to set up
   recurrence manually.
 - **Subtasks are flattened** to top-level reminders.
 - **Time spent is not synced** (SP-only).
