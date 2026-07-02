@@ -270,9 +270,6 @@ export const remiMove = (
 ): Promise<unknown> =>
   runRemi(['move', listName, title, '--to-section', section], remiBin);
 
-export const remiCreateList = (name: string, remiBin: string): Promise<unknown> =>
-  runRemi(['create-list', name], remiBin);
-
 /**
  * Probe whether remi is runnable and Reminders access is granted. Returns a
  * discriminated result so the UI can show a precise status.
