@@ -203,26 +203,49 @@ npm run watch        # rebuild on change
 
 ## Releasing
 
-Releases are automated by GitHub Actions
-([`.github/workflows/release.yml`](.github/workflows/release.yml)). Pushing a
-version tag builds, tests, packages the `.zip`, and publishes a GitHub Release
-with that `.zip` attached — maintainers never upload artifacts by hand.
+This project is **pre-1.0 (`0.x`)**, so every release is published as a GitHub
+**prerelease**. Releases are fully automated by GitHub Actions
+([`.github/workflows/release.yml`](.github/workflows/release.yml)) — you never
+pick a version number by hand, create tags manually, or upload artifacts.
 
-1. Bump the version in **both** `package.json` and `src/manifest.json` (keep them
-   equal). The zip name and the release are derived from `src/manifest.json`.
-2. Commit the bump: `git commit -am "chore: release vX.Y.Z"`.
-3. Tag and push:
+### Cut a release
 
-   ```bash
-   git tag vX.Y.Z
-   git push origin main vX.Y.Z
-   ```
+Land a commit on `main` whose message contains the marker **`[release]`**:
 
-The workflow **fails the release if the tag does not match the manifest/package
-version**, so a mistagged release can't ship. On success, the new
-`sync-reminders-vX.Y.Z.zip` appears on the
-[Releases](https://github.com/Rahulsharma0810/superproductivity-apple-reminders-sync/releases)
-page with auto-generated notes.
+```bash
+git commit -am "feat: add priority mapping [release]"
+git push origin main
+```
+
+(Or merge a PR whose squash-commit message includes `[release]`.) Any push to
+`main` **without** the marker is ignored by the release workflow.
+
+### How the version is chosen (Conventional Commits)
+
+The workflow finds the latest `v*` tag, inspects every commit since it, and bumps
+automatically. Because the project is `0.x`, it **never bumps the major** —
+breaking changes bump the minor instead (SemVer's pre-1.0 convention):
+
+| Commits since last tag                       | Bump    | Example         |
+| -------------------------------------------- | ------- | --------------- |
+| `feat!:` / `refactor!:` / `BREAKING CHANGE:` | minor   | `0.1.2 → 0.2.0` |
+| `feat:`                                       | minor   | `0.1.2 → 0.2.0` |
+| `fix:` / `chore:` / `docs:` / anything else   | patch   | `0.1.2 → 0.1.3` |
+
+On the **first** release (when no `v*` tag exists yet) the workflow ships the
+version currently in `package.json` as-is, with no bump.
+
+### What the workflow does
+
+1. Computes the next `X.Y.Z` from commit history (above).
+2. Writes it into **both** `package.json` and `src/manifest.json`.
+3. Runs `typecheck` + `test` + `package`.
+4. Creates the `vX.Y.Z` tag and publishes a **prerelease** with
+   `sync-reminders-vX.Y.Z.zip` attached and auto-generated notes.
+
+> The version bump is applied only inside the built artifact and the tag — it is
+> **not** committed back to `main`. The next release computes its base from the
+> latest tag, so `main` never drifts out of sync with what was released.
 
 Every push to `main` and every pull request also runs
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) (typecheck, lint, test,

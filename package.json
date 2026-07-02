@@ -1,6 +1,6 @@
 {
   "name": "sync-reminders",
-  "version": "1.0.0",
+  "version": "0.1.2",
   "description": "Bidirectional sync between Super Productivity and Apple Reminders (via the remi CLI)",
   "author": "Rahul Sharma",
   "license": "MIT",

@@ -2,7 +2,7 @@
   "id": "sync-reminders",
   "manifestVersion": 1,
   "name": "Apple Reminders Sync",
-  "version": "1.0.0",
+  "version": "0.1.2",
   "description": "Bidirectional sync between SuperProductivity and Apple Reminders (via the remi CLI). macOS + desktop only.",
   "author": "SuperProductivity Community",
   "homepage": "https://github.com/super-productivity/super-productivity",

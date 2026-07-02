@@ -1,30 +1,50 @@
 name: Release
 
-# Publishes a prebuilt plugin .zip as a GitHub Release whenever a version tag
-# (e.g. v1.0.0) is pushed. End users download the .zip from the Releases page
-# and load it in SuperProductivity — no git clone or npm required.
+# Automated, conventional-commit-driven PRERELEASE publisher.
 #
-# Cut a release:
-#   1. Bump "version" in package.json AND "version" in src/manifest.json (keep them equal).
-#   2. Commit: `git commit -am "chore: release vX.Y.Z"`
-#   3. Tag + push: `git tag vX.Y.Z && git push origin main vX.Y.Z`
-# The workflow verifies the tag matches the manifest version, builds, tests,
-# packages the zip, and attaches it to a new Release.
+# The project is pre-1.0 (0.x), so every release is a GitHub *prerelease*.
+# You never pick a version by hand and you never create tags manually.
+#
+# How to cut a release:
+#   Land a commit on `main` whose message contains the marker "[release]".
+#   (Merge a PR whose squash-commit message includes [release], or push a
+#   commit like:  git commit -am "feat: add X [release]")
+#
+# What happens:
+#   1. The workflow finds the latest existing v* tag (or falls back to the
+#      version in package.json if there are no tags yet).
+#   2. It inspects every commit since that tag and picks a bump using
+#      Conventional Commits:
+#        - "feat!" / "BREAKING CHANGE" -> minor (0.x never bumps major)
+#        - "feat:"                     -> minor
+#        - "fix:" / anything else      -> patch
+#      (On the very first release, when no v* tag exists, it releases the
+#       current package.json version as-is with no bump.)
+#   3. It writes the new version into package.json AND src/manifest.json,
+#      builds + typechecks + tests + packages the .zip, creates the vX.Y.Z
+#      tag, and publishes a PRERELEASE with the .zip attached.
+#
+# End users download the .zip from the Releases page and load it in
+# SuperProductivity — no git clone or npm required.
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
-  contents: write # required to create the Release and upload assets
+  contents: write # required to create tags, releases, and upload assets
 
 jobs:
   release:
+    # Only run when the head commit explicitly asks for a release.
+    if: contains(github.event.head_commit.message, '[release]')
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout (full history + tags)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need full history + tags to compute the next version
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,22 +55,69 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify tag matches manifest version
+      - name: Compute next version (conventional commits, 0.x prerelease)
+        id: version
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          MANIFEST_VERSION="$(node -p "require('./src/manifest.json').version")"
-          PKG_VERSION="$(node -p "require('./package.json').version")"
-          echo "Tag:      $TAG_VERSION"
-          echo "Manifest: $MANIFEST_VERSION"
-          echo "Package:  $PKG_VERSION"
-          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
-            echo "::error::Tag ($TAG_VERSION) does not match src/manifest.json version ($MANIFEST_VERSION)."
+          set -euo pipefail
+
+          # Latest v* tag reachable, if any.
+          LAST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)"
+
+          if [ -z "$LAST_TAG" ]; then
+            # First release: ship the checked-in package.json version as-is.
+            BASE_VERSION="$(node -p "require('./package.json').version")"
+            echo "No previous v* tag. First release from package.json: $BASE_VERSION"
+            NEXT_VERSION="$BASE_VERSION"
+            RANGE=""
+          else
+            BASE_VERSION="${LAST_TAG#v}"
+            RANGE="${LAST_TAG}..HEAD"
+            echo "Last tag: $LAST_TAG (base $BASE_VERSION)"
+
+            # Collect commit subjects+bodies since the last tag.
+            LOG="$(git log --format='%B' "$RANGE")"
+
+            BUMP="patch"
+            # Breaking change -> minor on 0.x (never major while < 1.0.0).
+            if echo "$LOG" | grep -qE '(^|\n)[a-zA-Z]+(\([^)]*\))?!:' \
+               || echo "$LOG" | grep -q 'BREAKING CHANGE'; then
+              BUMP="minor"
+            elif echo "$LOG" | grep -qE '(^|\n)feat(\([^)]*\))?:'; then
+              BUMP="minor"
+            fi
+            echo "Detected bump: $BUMP"
+
+            IFS='.' read -r MA MI PA <<< "$BASE_VERSION"
+            case "$BUMP" in
+              minor) MI=$((MI + 1)); PA=0 ;;
+              patch) PA=$((PA + 1)) ;;
+            esac
+            NEXT_VERSION="${MA}.${MI}.${PA}"
+          fi
+
+          echo "Next version: $NEXT_VERSION"
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+
+          # Guard: never re-release an existing tag.
+          if git rev-parse "v$NEXT_VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag v$NEXT_VERSION already exists. Bump conventional commits or check history."
             exit 1
           fi
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "::error::Tag ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."
-            exit 1
-          fi
+
+      - name: Apply version to package.json + manifest
+        run: |
+          set -euo pipefail
+          NEXT="${{ steps.version.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            for (const f of ['package.json', 'src/manifest.json']) {
+              const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+              j.version = '$NEXT';
+              fs.writeFileSync(f, JSON.stringify(j, null, 2) + '\n');
+              console.log('Set ' + f + ' -> ' + '$NEXT');
+            }
+          "
 
       - name: Typecheck
         run: npm run typecheck
@@ -61,6 +128,7 @@ jobs:
       - name: Package plugin (.zip)
         id: package
         run: |
+          set -euo pipefail
           npm run package
           ZIP_NAME="$(node -p "const m=require('./src/manifest.json'); m.id + '-v' + m.version + '.zip'")"
           if [ ! -f "$ZIP_NAME" ]; then
@@ -71,14 +139,30 @@ jobs:
           echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
           echo "Built $ZIP_NAME"
 
-      - name: Create GitHub Release
+      - name: Create tag
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # Tag the released tree (the version bump lives only in the artifact,
+          # not committed back to main to avoid a push loop).
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+
+      - name: Create GitHub Prerelease
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          prerelease: true
           files: ${{ steps.package.outputs.zip_name }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           body: |
-            ## Apple Reminders Sync — ${{ github.ref_name }}
+            ## Apple Reminders Sync — ${{ steps.version.outputs.tag }}
+
+            > Pre-1.0 preview release. Expect changes; feedback welcome.
 
             Prebuilt plugin for [Super Productivity](https://super-productivity.com).
 
