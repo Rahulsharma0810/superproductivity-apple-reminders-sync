@@ -55,6 +55,20 @@ remi doctor
 `remi` talks to the macOS Reminders database on behalf of whichever app launched
 it. When run from this plugin, **that app is SuperProductivity** (Electron).
 
+> [!IMPORTANT]
+> **The official SuperProductivity build cannot be granted Reminders access yet.**
+> macOS silently denies Reminders (EventKit) to any app whose bundle does not
+> declare `NSRemindersUsageDescription`. The stock, notarized SuperProductivity
+> build does not declare it, so **no permission prompt appears and SuperProductivity
+> never shows up under System Settings → Privacy & Security → Reminders** — there is
+> nothing to toggle. This is an upstream packaging matter, not a plugin bug:
+>
+> - Feature request: [super-productivity#8716](https://github.com/super-productivity/super-productivity/issues/8716)
+> - One-line fix (PR): [super-productivity#8717](https://github.com/super-productivity/super-productivity/pull/8717)
+>
+> Once that ships in an official release, the steps below will work as written.
+> Until then, see **[Running against your own SuperProductivity build](#running-against-your-own-superproductivity-build)**.
+
 1. Open **System Settings → Privacy & Security → Reminders**.
 2. Enable access for **SuperProductivity** (and, if you also run `remi` from a
    terminal, for your terminal app — Terminal / iTerm / etc.).
@@ -72,6 +86,37 @@ it. When run from this plugin, **that app is SuperProductivity** (Electron).
 
 If access is missing, the plugin's config screen shows a red banner and sync
 pauses with an actionable snackbar instead of failing silently.
+
+### Running against your own SuperProductivity build
+
+If you don't want to wait for
+[super-productivity#8717](https://github.com/super-productivity/super-productivity/pull/8717)
+to be merged and released, you can build SuperProductivity yourself with the
+Reminders usage string declared. The change is a single line in
+`electron-builder.yaml`, under `mac.extendInfo`:
+
+```yaml
+mac:
+  extendInfo:
+    NSRemindersUsageDescription: Super Productivity only accesses Apple Reminders if you enable a plugin or integration that syncs your tasks with the Reminders app.
+```
+
+Then build the macOS desktop app from source per the
+[SuperProductivity contributing/build docs](https://github.com/super-productivity/super-productivity).
+A build produced this way **will** appear under
+**System Settings → Privacy & Security → Reminders**, and the steps above apply
+normally.
+
+Notes:
+
+- This is only needed on **macOS**. The permission string is inert by default —
+  macOS only prompts once a plugin actually accesses Reminders, and you can deny
+  or revoke it at any time.
+- A self-signed local build is not notarized, so Gatekeeper may warn on first
+  launch (right-click → Open, or allow it in Privacy & Security).
+- The official notarized build **cannot** be patched in place: editing its
+  `Info.plist` breaks the code signature and the hardened runtime refuses to
+  launch. You must build from source.
 
 ---
 
@@ -150,6 +195,14 @@ notes back into SP):
 ## Limitations
 
 - **Desktop macOS only.** Needs the Electron app + the `remi` binary.
+- **The official SuperProductivity build can't be granted Reminders access yet.**
+  It doesn't declare `NSRemindersUsageDescription`, so macOS silently denies
+  Reminders and the app never appears in the Reminders permission list. Fix is
+  upstream ([#8716](https://github.com/super-productivity/super-productivity/issues/8716) /
+  [#8717](https://github.com/super-productivity/super-productivity/pull/8717)); in
+  the meantime you can
+  [build your own SP](#running-against-your-own-superproductivity-build) with the
+  one-line declaration.
 - **No time-of-day on the Apple side.** Reminders due dates are date-only here;
   an SP due *time* is not represented in Apple. (SP keeps its own time; the
   plugin only touches SP's due when the **day** differs.)
@@ -264,8 +317,13 @@ package) to keep `main` releasable.
 - **"Node script execution is not available (desktop only)."** — You're on the
   web/PWA build, or Node execution isn't granted. Use the desktop app and
   approve the consent prompt.
-- **"Reminders access is denied."** — Grant Reminders access to SuperProductivity
-  in System Settings, run `remi authorize`, and restart the app.
+- **"Reminders access is denied."** — If SuperProductivity does **not** appear
+  under System Settings → Privacy & Security → Reminders at all, you're on the
+  stock build that lacks the `NSRemindersUsageDescription` declaration — see
+  [Grant Reminders access](#2-grant-reminders-access) and upstream
+  [#8716](https://github.com/super-productivity/super-productivity/issues/8716) /
+  [#8717](https://github.com/super-productivity/super-productivity/pull/8717).
+  If it **is** listed, enable it, run `remi authorize`, and restart the app.
 - **`Could not run "remi"`** — The binary isn't on `PATH`. Set an absolute path
   in the config's "remi binary path" field.
 - **Tags aren't creating sections** — Grant Full Disk Access to
