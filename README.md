@@ -156,7 +156,8 @@ notes back into SP):
 - **Recurrence is one-way and set at creation.** `remi` itself fully supports
   recurring reminders, so a repeating SP task **is** created as a repeating Apple
   reminder. The limits are: (1) `remi`'s CLI only accepts `--repeat` on `add`, so
-  editing an SP task's recurrence afterward isn't pushed to an existing reminder;
+  editing an SP task's recurrence afterward isn't pushed to an existing reminder
+  (tracked upstream in [remi#3](https://github.com/mattheworiordan/remi/issues/3));
   and (2) the SuperProductivity **plugin API has no way to create a repeat
   configuration**, so a recurring Apple reminder coming *back* into SP is imported
   as a normal task with a `[repeats: …]` note and a one-time suggestion to set up
