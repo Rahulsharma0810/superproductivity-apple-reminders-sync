@@ -1,0 +1,9 @@
+coverage/
+/dist/
+node_modules/
+*.zip
+.build/
+tsconfig.build.json
+
+# NOTE: vendored type declarations under types/plugin-api/dist/ are intentionally
+# committed (the file: dependency needs them); only the build output /dist/ is ignored.

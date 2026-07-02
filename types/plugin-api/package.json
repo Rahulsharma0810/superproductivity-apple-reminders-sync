@@ -1,0 +1,10 @@
+{
+  "name": "@super-productivity/plugin-api",
+  "version": "1.0.1-vendored",
+  "description": "Vendored Super Productivity plugin API type declarations (matches the runtime PluginAPI injected by current Super Productivity). Types only; the PluginAPI global is provided at runtime by the host app.",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*.d.ts"
+  ],
+  "license": "MIT"
+}

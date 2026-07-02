@@ -1,0 +1,57 @@
+{
+  "name": "sync-reminders",
+  "version": "1.0.0",
+  "description": "Bidirectional sync between Super Productivity and Apple Reminders (via the remi CLI)",
+  "author": "Rahul Sharma",
+  "license": "MIT",
+  "homepage": "https://github.com/Rahulsharma0810/superproductivity-apple-reminders-sync#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rahulsharma0810/superproductivity-apple-reminders-sync.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Rahulsharma0810/superproductivity-apple-reminders-sync/issues"
+  },
+  "keywords": [
+    "super-productivity",
+    "super-productivity-plugin",
+    "apple-reminders",
+    "reminders",
+    "sync",
+    "remi",
+    "macos",
+    "productivity",
+    "task-management"
+  ],
+  "scripts": {
+    "watch": "node scripts/watch.js",
+    "build": "node scripts/build.js",
+    "package": "npm run build && node scripts/package.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "prettier": "prettier --write 'src/**/*.{ts,js,json}'",
+    "prettier:check": "prettier --check 'src/**/*.{ts,js,json}'",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@jest/globals": "^30.0.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.15.33",
+    "archiver": "^7.0.1",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.13.0",
+    "jest": "^30.0.4",
+    "jest-environment-jsdom": "^30.0.4",
+    "prettier": "^3.3.3",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.10.0"
+  },
+  "dependencies": {
+    "@super-productivity/plugin-api": "file:types/plugin-api"
+  }
+}

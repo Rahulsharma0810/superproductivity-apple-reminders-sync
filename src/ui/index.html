@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Apple Reminders Sync</title>
+    <style>
+      /*
+       * Apple Reminders Sync — config UI.
+       * The SP UI Kit provides base element styles (body, headings, buttons,
+       * inputs, etc.). Only plugin-specific layout rules live here.
+       */
+      body {
+        padding: var(--s3);
+        background: transparent;
+      }
+
+      .container {
+        max-width: 640px;
+        margin: 0 auto;
+      }
+
+      .subtitle {
+        color: var(--text-color-muted);
+        margin-bottom: var(--s3);
+      }
+
+      .form-group {
+        margin-bottom: var(--s3);
+      }
+
+      label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: var(--s-half);
+        color: var(--text-color-muted);
+      }
+
+      .inline-label {
+        display: flex;
+        align-items: center;
+        gap: var(--s);
+        font-weight: 500;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      .inline-label input[type='checkbox'] {
+        width: auto;
+        margin: 0;
+      }
+
+      .help-text {
+        font-size: 0.85em;
+        color: var(--text-color-muted);
+        margin-top: var(--s-half);
+      }
+
+      .section-title {
+        font-weight: 600;
+        margin: var(--s3) 0 var(--s) 0;
+      }
+
+      .mapping-row {
+        display: flex;
+        gap: var(--s);
+        align-items: center;
+        margin-bottom: var(--s);
+      }
+
+      .mapping-row select,
+      .mapping-row input {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .mapping-arrow {
+        color: var(--text-color-muted);
+        flex: 0 0 auto;
+      }
+
+      .remove-row-btn {
+        flex: 0 0 auto;
+        padding: var(--s-quarter) var(--s);
+      }
+
+      .button-group {
+        display: flex;
+        gap: var(--s);
+        margin-top: var(--s3);
+        flex-wrap: wrap;
+      }
+
+      .banner {
+        border-radius: var(--card-border-radius);
+        padding: var(--s) var(--s2);
+        margin-bottom: var(--s3);
+        border: 1px solid var(--divider-color);
+      }
+
+      .banner.ok {
+        background: color-mix(in srgb, var(--color-success) 12%, transparent);
+        border-color: color-mix(in srgb, var(--color-success) 30%, transparent);
+      }
+
+      .banner.warn {
+        background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+        border-color: color-mix(in srgb, var(--c-primary) 30%, transparent);
+      }
+
+      .banner.error {
+        background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+        border-color: color-mix(in srgb, var(--color-danger) 30%, transparent);
+      }
+
+      .status {
+        padding: var(--s) var(--s2);
+        border-radius: var(--card-border-radius);
+        margin-top: var(--s3);
+        display: none;
+      }
+
+      .status.show {
+        display: block;
+      }
+
+      .status.info {
+        background: color-mix(in srgb, var(--c-primary) 15%, transparent);
+        color: var(--c-primary);
+        border: 1px solid color-mix(in srgb, var(--c-primary) 30%, transparent);
+      }
+
+      .status.success {
+        background: color-mix(in srgb, var(--color-success) 15%, transparent);
+        color: var(--color-success);
+        border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+      }
+
+      .status.error {
+        background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+        color: var(--color-danger);
+        border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--divider-color);
+        border-top: 2px solid var(--c-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-left: var(--s);
+        vertical-align: middle;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .advanced-summary {
+        cursor: pointer;
+        font-weight: 600;
+        margin-top: var(--s3);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Apple Reminders Sync</h1>
+      <p class="subtitle">
+        Two-way sync between Super Productivity and Apple Reminders (via the
+        <code>remi</code> CLI).
+      </p>
+
+      <div
+        id="healthBanner"
+        class="banner"
+        style="display: none"
+      ></div>
+
+      <form id="configForm">
+        <div class="form-group">
+          <label class="inline-label">
+            <input
+              type="checkbox"
+              id="isEnabled"
+            />
+            Enable syncing
+          </label>
+          <div class="help-text">
+            When enabled, mapped projects sync automatically in the background.
+          </div>
+        </div>
+
+        <div class="section-title">Project &harr; List mappings</div>
+        <div class="help-text">
+          Each row links one SP project to one Apple Reminders list. Tasks flow
+          both ways between them.
+        </div>
+        <div
+          id="mappingsContainer"
+          style="margin-top: var(--s)"
+        ></div>
+        <button
+          type="button"
+          class="btn"
+          id="addMappingBtn"
+        >
+          + Add mapping
+        </button>
+
+        <details>
+          <summary class="advanced-summary">Options</summary>
+
+          <div
+            class="form-group"
+            style="margin-top: var(--s2)"
+          >
+            <label class="inline-label">
+              <input
+                type="checkbox"
+                id="isSyncEstimateInNotes"
+              />
+              Sync time estimate into notes
+            </label>
+            <div class="help-text">
+              Writes <code>[estimate: 2h]</code> into the reminder's notes and
+              reads it back. Time spent stays in Super Productivity only.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="inline-label">
+              <input
+                type="checkbox"
+                id="isSyncTagsAsSections"
+              />
+              Map first tag to a Reminders section
+            </label>
+            <div class="help-text">
+              Requires Full Disk Access for <code>remi</code>. If sections are
+              unavailable, syncing continues without them.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="remiBinaryPath">Path to <code>remi</code> binary (optional)</label>
+            <input
+              type="text"
+              id="remiBinaryPath"
+              placeholder="/opt/homebrew/bin/remi"
+            />
+            <div class="help-text">
+              Leave empty to use <code>remi</code> from PATH. Set an absolute
+              path if the app can't find it.
+            </div>
+          </div>
+        </details>
+
+        <div class="button-group">
+          <button
+            type="submit"
+            class="btn-primary"
+            id="saveBtn"
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            class="btn"
+            id="syncNowBtn"
+          >
+            Sync now
+          </button>
+          <button
+            type="button"
+            class="btn"
+            id="checkBtn"
+          >
+            Check connection
+          </button>
+        </div>
+      </form>
+
+      <div
+        id="status"
+        class="status"
+      ></div>
+    </div>
+
+    <script>
+      // ---- State ---------------------------------------------------------
+      let projects = [];
+      let lists = [];
+      let listsPermissionDenied = false;
+
+      // ---- Messaging (mirrors sync-md handshake) -------------------------
+      async function sendMessage(message) {
+        return new Promise((resolve, reject) => {
+          const messageId = Date.now().toString() + Math.random().toString(36).slice(2);
+          const timeout = setTimeout(() => {
+            window.removeEventListener('message', handler);
+            reject(new Error('Message timeout'));
+          }, 15000);
+
+          const handler = (event) => {
+            if (
+              event.data?.messageId === messageId ||
+              (event.data?.type === 'PLUGIN_MESSAGE_RESPONSE' &&
+                event.data?.messageId === messageId)
+            ) {
+              clearTimeout(timeout);
+              window.removeEventListener('message', handler);
+              resolve(event.data.response || event.data);
+            }
+          };
+
+          window.addEventListener('message', handler);
+          window.parent.postMessage({ type: 'PLUGIN_MESSAGE', message, messageId }, '*');
+        });
+      }
+
+      // Some responses are wrapped in a { result } envelope by the host.
+      function unwrap(response) {
+        return response?.result || response;
+      }
+
+      // ---- UI helpers ----------------------------------------------------
+      function showStatus(message, type = 'info') {
+        const status = document.getElementById('status');
+        status.textContent = message;
+        status.className = `status ${type} show`;
+        if (type !== 'error') {
+          setTimeout(() => status.classList.remove('show'), 5000);
+        }
+      }
+
+      function showHealthBanner(text, kind) {
+        const banner = document.getElementById('healthBanner');
+        banner.textContent = text;
+        banner.className = `banner ${kind}`;
+        banner.style.display = 'block';
+      }
+
+      function projectOptionsHtml(selectedId) {
+        let html = '<option value="">Select a project…</option>';
+        for (const p of projects) {
+          const sel = p.id === selectedId ? ' selected' : '';
+          html += `<option value="${escapeHtml(p.id)}"${sel}>${escapeHtml(p.title)}</option>`;
+        }
+        return html;
+      }
+
+      function escapeHtml(str) {
+        return String(str).replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              '&': '&amp;',
+              '<': '&lt;',
+              '>': '&gt;',
+              '"': '&quot;',
+              "'": '&#39;',
+            })[c],
+        );
+      }
+
+      // Build one mapping row. Uses a <select> for the list when we could read
+      // the lists from remi, otherwise a free-text input (permission denied /
+      // web fallback).
+      function createMappingRow(mapping) {
+        const row = document.createElement('div');
+        row.className = 'mapping-row';
+
+        const projectSelect = document.createElement('select');
+        projectSelect.className = 'mapping-project';
+        projectSelect.innerHTML = projectOptionsHtml(mapping?.projectId || '');
+
+        const arrow = document.createElement('span');
+        arrow.className = 'mapping-arrow';
+        arrow.textContent = '↔';
+
+        let listField;
+        if (lists.length > 0 && !listsPermissionDenied) {
+          listField = document.createElement('select');
+          listField.className = 'mapping-list';
+          let html = '<option value="">Select a list…</option>';
+          let matched = false;
+          for (const l of lists) {
+            const name = l.title || l.name || '';
+            const sel = name === mapping?.reminderListName ? ' selected' : '';
+            if (sel) matched = true;
+            html += `<option value="${escapeHtml(name)}"${sel}>${escapeHtml(name)}</option>`;
+          }
+          // Preserve a previously-configured list even if it's not in the
+          // freshly fetched set.
+          if (!matched && mapping?.reminderListName) {
+            html += `<option value="${escapeHtml(mapping.reminderListName)}" selected>${escapeHtml(mapping.reminderListName)} (not found)</option>`;
+          }
+          listField.innerHTML = html;
+        } else {
+          listField = document.createElement('input');
+          listField.type = 'text';
+          listField.className = 'mapping-list';
+          listField.placeholder = 'Reminders list name';
+          listField.value = mapping?.reminderListName || '';
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn remove-row-btn';
+        removeBtn.textContent = '✕';
+        removeBtn.addEventListener('click', () => row.remove());
+
+        row.appendChild(projectSelect);
+        row.appendChild(arrow);
+        row.appendChild(listField);
+        row.appendChild(removeBtn);
+        return row;
+      }
+
+      function addMappingRow(mapping) {
+        document
+          .getElementById('mappingsContainer')
+          .appendChild(createMappingRow(mapping));
+      }
+
+      function collectConfig() {
+        const mappings = [];
+        document.querySelectorAll('#mappingsContainer .mapping-row').forEach((row) => {
+          const projectId = row.querySelector('.mapping-project')?.value?.trim();
+          const reminderListName = row.querySelector('.mapping-list')?.value?.trim();
+          if (projectId && reminderListName) {
+            mappings.push({ projectId, reminderListName });
+          }
+        });
+        return {
+          isEnabled: document.getElementById('isEnabled').checked,
+          mappings,
+          isSyncTagsAsSections: document.getElementById('isSyncTagsAsSections').checked,
+          isSyncEstimateInNotes: document.getElementById('isSyncEstimateInNotes').checked,
+          remiBinaryPath: document.getElementById('remiBinaryPath').value.trim(),
+        };
+      }
+
+      // ---- Data loading --------------------------------------------------
+      async function loadProjects() {
+        try {
+          if (window.PluginAPI?.getAllProjects) {
+            projects = await window.PluginAPI.getAllProjects();
+          } else {
+            const res = unwrap(await sendMessage({ type: 'getProjects' }));
+            projects = (res?.success && res.projects) || [];
+          }
+        } catch (e) {
+          projects = [];
+          console.error('Failed to load projects', e);
+        }
+      }
+
+      async function loadLists() {
+        try {
+          const res = unwrap(await sendMessage({ type: 'getLists' }));
+          if (res?.success && Array.isArray(res.lists)) {
+            lists = res.lists;
+            listsPermissionDenied = false;
+          } else if (res?.permissionDenied) {
+            lists = [];
+            listsPermissionDenied = true;
+          } else {
+            lists = [];
+          }
+        } catch (e) {
+          lists = [];
+          console.error('Failed to load lists', e);
+        }
+      }
+
+      async function loadConfig() {
+        try {
+          const res = unwrap(await sendMessage({ type: 'getConfig' }));
+          const cfg = res?.config || {};
+          document.getElementById('isEnabled').checked = !!cfg.isEnabled;
+          document.getElementById('isSyncTagsAsSections').checked =
+            !!cfg.isSyncTagsAsSections;
+          document.getElementById('isSyncEstimateInNotes').checked =
+            cfg.isSyncEstimateInNotes !== false;
+          document.getElementById('remiBinaryPath').value = cfg.remiBinaryPath || '';
+
+          const container = document.getElementById('mappingsContainer');
+          container.innerHTML = '';
+          const mappings = Array.isArray(cfg.mappings) ? cfg.mappings : [];
+          if (mappings.length === 0) {
+            addMappingRow();
+          } else {
+            mappings.forEach((m) => addMappingRow(m));
+          }
+        } catch (e) {
+          console.error('Failed to load config', e);
+          addMappingRow();
+        }
+      }
+
+      async function checkConnection() {
+        try {
+          const res = unwrap(await sendMessage({ type: 'healthCheck' }));
+          const health = res?.health;
+          if (!res?.success || !health) {
+            showHealthBanner('Could not run remi. Is it installed?', 'error');
+            return;
+          }
+          if (health.ok && health.permission) {
+            showHealthBanner('✓ ' + health.message, 'ok');
+          } else if (health.ok && !health.permission) {
+            showHealthBanner('⚠ ' + health.message, 'warn');
+          } else {
+            showHealthBanner('✕ ' + health.message, 'error');
+          }
+        } catch (e) {
+          showHealthBanner('Connection check failed: ' + e.message, 'error');
+        }
+      }
+
+      // ---- Actions -------------------------------------------------------
+      document.getElementById('addMappingBtn').addEventListener('click', () => {
+        addMappingRow();
+      });
+
+      document.getElementById('checkBtn').addEventListener('click', async () => {
+        showStatus('Checking connection…', 'info');
+        await checkConnection();
+        // Refresh lists after a check in case access was just granted.
+        await loadLists();
+      });
+
+      document.getElementById('syncNowBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('syncNowBtn');
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.innerHTML = 'Syncing<span class="spinner"></span>';
+        try {
+          const res = unwrap(await sendMessage({ type: 'syncNow' }));
+          if (res?.success) {
+            const r = res.result;
+            if (r) {
+              showStatus(
+                `Sync complete — ${r.created} created, ${r.updated} updated, ${r.completed} completed, ${r.deleted} deleted.`,
+                'success',
+              );
+            } else {
+              showStatus('Sync complete.', 'success');
+            }
+          } else {
+            showStatus(res?.error || 'Sync failed.', 'error');
+          }
+        } catch (e) {
+          showStatus('Sync failed: ' + e.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = original;
+        }
+      });
+
+      document.getElementById('configForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = 'Saving<span class="spinner"></span>';
+
+        try {
+          const config = collectConfig();
+          if (config.isEnabled && config.mappings.length === 0) {
+            showStatus('Add at least one project ↔ list mapping before enabling.', 'error');
+            return;
+          }
+
+          const res = unwrap(await sendMessage({ type: 'saveConfig', config }));
+          if (!res?.success) {
+            throw new Error(res?.error || 'Failed to save configuration');
+          }
+          showStatus('Configuration saved.', 'success');
+        } catch (err) {
+          console.error('Failed to save config', err);
+          showStatus('Failed to save configuration: ' + err.message, 'error');
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save';
+        }
+      });
+
+      // ---- Init ----------------------------------------------------------
+      async function waitForPluginAPI(maxAttempts = 20) {
+        for (let i = 0; i < maxAttempts; i++) {
+          if (window.PluginAPI) return true;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return false;
+      }
+
+      window.addEventListener('load', async () => {
+        const apiAvailable = await waitForPluginAPI();
+        if (!apiAvailable) {
+          showStatus('Plugin API not available. Please reload.', 'error');
+          return;
+        }
+
+        if (!window.PluginAPI?.executeNodeScript) {
+          showHealthBanner(
+            'This plugin requires the desktop version of Super Productivity. Syncing with Apple Reminders is not available in the web version.',
+            'error',
+          );
+          document.getElementById('configForm').style.opacity = '0.5';
+          document.getElementById('configForm').style.pointerEvents = 'none';
+          return;
+        }
+
+        await loadProjects();
+        await loadLists();
+        await loadConfig();
+        await checkConnection();
+      });
+    </script>
+  </body>
+</html>
