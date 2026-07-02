@@ -210,21 +210,27 @@ pick a version number by hand, create tags manually, or upload artifacts.
 
 ### Cut a release
 
-Land a commit on `main` whose message contains the marker **`[release]`**:
+Releases are triggered **manually** so one can never fire by accident from a
+routine push. From the GitHub UI:
+
+**Actions** tab → **Release** → **Run workflow** (on `main`).
+
+Or from the CLI:
 
 ```bash
-git commit -am "feat: add priority mapping [release]"
-git push origin main
+gh workflow run release.yml --ref main
 ```
 
-(Or merge a PR whose squash-commit message includes `[release]`.) Any push to
-`main` **without** the marker is ignored by the release workflow.
+The **Version bump** input defaults to `auto` (derive it from Conventional
+Commits, below). You can override it with `patch` or `minor` to force a specific
+bump regardless of commit messages.
 
 ### How the version is chosen (Conventional Commits)
 
-The workflow finds the latest `v*` tag, inspects every commit since it, and bumps
-automatically. Because the project is `0.x`, it **never bumps the major** —
-breaking changes bump the minor instead (SemVer's pre-1.0 convention):
+With bump = `auto`, the workflow finds the latest `v*` tag, inspects every commit
+since it, and bumps automatically. Because the project is `0.x`, it **never bumps
+the major** — breaking changes bump the minor instead (SemVer's pre-1.0
+convention):
 
 | Commits since last tag                       | Bump    | Example         |
 | -------------------------------------------- | ------- | --------------- |
@@ -232,8 +238,8 @@ breaking changes bump the minor instead (SemVer's pre-1.0 convention):
 | `feat:`                                       | minor   | `0.1.2 → 0.2.0` |
 | `fix:` / `chore:` / `docs:` / anything else   | patch   | `0.1.2 → 0.1.3` |
 
-On the **first** release (when no `v*` tag exists yet) the workflow ships the
-version currently in `package.json` as-is, with no bump.
+On the **first** release (when no `v*` tag exists yet and bump = `auto`) the
+workflow ships the version currently in `package.json` as-is, with no bump.
 
 ### What the workflow does
 

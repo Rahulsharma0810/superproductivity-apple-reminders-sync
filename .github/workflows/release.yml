@@ -1,23 +1,25 @@
 name: Release
 
-# Automated, conventional-commit-driven PRERELEASE publisher.
+# Manually-triggered, conventional-commit-driven PRERELEASE publisher.
 #
 # The project is pre-1.0 (0.x), so every release is a GitHub *prerelease*.
 # You never pick a version by hand and you never create tags manually.
 #
 # How to cut a release:
-#   Land a commit on `main` whose message contains the marker "[release]".
-#   (Merge a PR whose squash-commit message includes [release], or push a
-#   commit like:  git commit -am "feat: add X [release]")
+#   Actions tab -> "Release" -> "Run workflow" (on branch main).
+#   Or from the CLI:  gh workflow run release.yml --ref main
+#   Triggering is manual on purpose, so a release can never fire by accident
+#   from a routine push or a commit message.
 #
 # What happens:
 #   1. The workflow finds the latest existing v* tag (or falls back to the
 #      version in package.json if there are no tags yet).
-#   2. It inspects every commit since that tag and picks a bump using
-#      Conventional Commits:
+#   2. It picks a bump. By default this is derived from Conventional Commits
+#      since the last tag:
 #        - "feat!" / "BREAKING CHANGE" -> minor (0.x never bumps major)
 #        - "feat:"                     -> minor
 #        - "fix:" / anything else      -> patch
+#      You can override this with the "bump" input (patch | minor | auto).
 #      (On the very first release, when no v* tag exists, it releases the
 #       current package.json version as-is with no bump.)
 #   3. It writes the new version into package.json AND src/manifest.json,
@@ -28,17 +30,23 @@ name: Release
 # SuperProductivity — no git clone or npm required.
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump: auto (from conventional commits), or force patch/minor.'
+        required: false
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
 
 permissions:
   contents: write # required to create tags, releases, and upload assets
 
 jobs:
   release:
-    # Only run when the head commit explicitly asks for a release.
-    if: contains(github.event.head_commit.message, '[release]')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history + tags)
@@ -60,37 +68,50 @@ jobs:
         run: |
           set -euo pipefail
 
+          BUMP_INPUT="${{ github.event.inputs.bump }}"
+          [ -z "$BUMP_INPUT" ] && BUMP_INPUT="auto"
+          echo "Requested bump mode: $BUMP_INPUT"
+
           # Latest v* tag reachable, if any.
           LAST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n1 || true)"
 
-          if [ -z "$LAST_TAG" ]; then
-            # First release: ship the checked-in package.json version as-is.
+          if [ -z "$LAST_TAG" ] && [ "$BUMP_INPUT" = "auto" ]; then
+            # First release with no forced bump: ship the checked-in
+            # package.json version as-is.
             BASE_VERSION="$(node -p "require('./package.json').version")"
             echo "No previous v* tag. First release from package.json: $BASE_VERSION"
             NEXT_VERSION="$BASE_VERSION"
-            RANGE=""
           else
-            BASE_VERSION="${LAST_TAG#v}"
-            RANGE="${LAST_TAG}..HEAD"
-            echo "Last tag: $LAST_TAG (base $BASE_VERSION)"
-
-            # Collect commit subjects+bodies since the last tag.
-            LOG="$(git log --format='%B' "$RANGE")"
-
-            BUMP="patch"
-            # Breaking change -> minor on 0.x (never major while < 1.0.0).
-            if echo "$LOG" | grep -qE '(^|\n)[a-zA-Z]+(\([^)]*\))?!:' \
-               || echo "$LOG" | grep -q 'BREAKING CHANGE'; then
-              BUMP="minor"
-            elif echo "$LOG" | grep -qE '(^|\n)feat(\([^)]*\))?:'; then
-              BUMP="minor"
+            if [ -z "$LAST_TAG" ]; then
+              BASE_VERSION="$(node -p "require('./package.json').version")"
+              echo "No previous v* tag; forcing '$BUMP_INPUT' from package.json base $BASE_VERSION"
+              BUMP="$BUMP_INPUT"
+            else
+              BASE_VERSION="${LAST_TAG#v}"
+              echo "Last tag: $LAST_TAG (base $BASE_VERSION)"
+              if [ "$BUMP_INPUT" != "auto" ]; then
+                BUMP="$BUMP_INPUT"
+                echo "Forced bump: $BUMP"
+              else
+                # Derive bump from Conventional Commits since the last tag.
+                LOG="$(git log --format='%B' "${LAST_TAG}..HEAD")"
+                BUMP="patch"
+                # Breaking change -> minor on 0.x (never major while < 1.0.0).
+                if echo "$LOG" | grep -qE '(^|\n)[a-zA-Z]+(\([^)]*\))?!:' \
+                   || echo "$LOG" | grep -q 'BREAKING CHANGE'; then
+                  BUMP="minor"
+                elif echo "$LOG" | grep -qE '(^|\n)feat(\([^)]*\))?:'; then
+                  BUMP="minor"
+                fi
+                echo "Detected bump from commits: $BUMP"
+              fi
             fi
-            echo "Detected bump: $BUMP"
 
             IFS='.' read -r MA MI PA <<< "$BASE_VERSION"
             case "$BUMP" in
               minor) MI=$((MI + 1)); PA=0 ;;
               patch) PA=$((PA + 1)) ;;
+              *) echo "::error::Unknown bump '$BUMP'"; exit 1 ;;
             esac
             NEXT_VERSION="${MA}.${MI}.${PA}"
           fi
@@ -101,7 +122,7 @@ jobs:
 
           # Guard: never re-release an existing tag.
           if git rev-parse "v$NEXT_VERSION" >/dev/null 2>&1; then
-            echo "::error::Tag v$NEXT_VERSION already exists. Bump conventional commits or check history."
+            echo "::error::Tag v$NEXT_VERSION already exists. Use the 'bump' input (patch/minor) to move forward."
             exit 1
           fi
 
