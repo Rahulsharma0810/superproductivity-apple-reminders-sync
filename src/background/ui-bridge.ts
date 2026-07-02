@@ -24,6 +24,19 @@ interface PluginMessage {
   config?: SyncConfig;
 }
 
+/**
+ * Resolve the remi binary path for a request. Prefer the path the user has
+ * typed into the (possibly unsaved) config form so "Check connection" and
+ * "Sync now" reflect edits immediately; fall back to the saved config.
+ */
+const resolveRemiBinaryPath = (message: PluginMessage): string => {
+  const fromForm = message.config?.remiBinaryPath;
+  if (typeof fromForm === 'string' && fromForm.trim()) {
+    return fromForm.trim();
+  }
+  return loadLocalConfig().remiBinaryPath;
+};
+
 const reinitFromConfig = (config: SyncConfig): void => {
   try {
     if (isConfigActive(config)) {
@@ -71,8 +84,7 @@ export const initUiBridge = (): void => {
 
       case 'getLists':
         try {
-          const config = loadLocalConfig();
-          const lists = await remiListLists(config.remiBinaryPath);
+          const lists = await remiListLists(resolveRemiBinaryPath(message));
           return { success: true, lists };
         } catch (error) {
           if (error instanceof RemiPermissionError) {
@@ -87,8 +99,7 @@ export const initUiBridge = (): void => {
 
       case 'healthCheck':
         try {
-          const config = loadLocalConfig();
-          const health = await remiHealthCheck(config.remiBinaryPath);
+          const health = await remiHealthCheck(resolveRemiBinaryPath(message));
           return { success: true, health };
         } catch (error) {
           return { success: false, error: (error as Error).message };

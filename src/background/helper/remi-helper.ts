@@ -27,19 +27,69 @@ export interface RemiResult<T> {
  *
  * We spawn via execFileSync (no shell) to avoid any argument-injection concern
  * with task titles/notes.
+ *
+ * CRITICAL PATH HANDLING: Super Productivity spawns plugin node scripts with a
+ * stripped environment (only NODE_ENV + ELECTRON_RUN_AS_NODE — see
+ * electron/plugin-node-executor.ts). There is effectively NO PATH, so a bare
+ * `remi` fails with ENOENT and even Homebrew locations are invisible. This
+ * script therefore:
+ *   1. Rebuilds a sane PATH (Homebrew + standard bins) for execFileSync.
+ *   2. When the caller passed a bare command (no '/'), resolves it against
+ *      common install locations before spawning, so users don't have to set an
+ *      absolute path in most cases.
+ * The `resolvedBin` is returned so callers can surface which binary ran.
  */
 const REMI_RUNNER_SCRIPT = `
   const { execFileSync } = require('child_process');
-  const bin = args[0];
+  const fs = require('fs');
+  const path = require('path');
+
+  const requestedBin = args[0];
   const argv = args[1];
+
+  // Directories where 'remi' commonly lives, plus anything already on PATH.
+  const COMMON_BIN_DIRS = [
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+    '/opt/local/bin',
+    process.env.HOME ? path.join(process.env.HOME, '.local', 'bin') : '',
+    process.env.HOME ? path.join(process.env.HOME, 'bin') : '',
+  ].filter(Boolean);
+
+  const existingPath = process.env.PATH ? process.env.PATH.split(':').filter(Boolean) : [];
+  const mergedPathDirs = [];
+  for (const d of [...COMMON_BIN_DIRS, ...existingPath]) {
+    if (d && mergedPathDirs.indexOf(d) === -1) mergedPathDirs.push(d);
+  }
+  const mergedPath = mergedPathDirs.join(':');
+
+  // Resolve a bare command name (no slash) against the common dirs so we can
+  // pass an absolute path to execFileSync even when PATH lookup would fail.
+  let resolvedBin = requestedBin;
+  if (requestedBin && requestedBin.indexOf('/') === -1) {
+    for (const dir of COMMON_BIN_DIRS) {
+      const candidate = path.join(dir, requestedBin);
+      try {
+        fs.accessSync(candidate, fs.constants.X_OK);
+        resolvedBin = candidate;
+        break;
+      } catch (e) {
+        // keep looking
+      }
+    }
+  }
+
   let stdout = '';
   let stderr = '';
   let exitCode = 0;
   try {
-    stdout = execFileSync(bin, argv, {
+    stdout = execFileSync(resolvedBin, argv, {
       encoding: 'utf8',
       maxBuffer: 32 * 1024 * 1024,
       timeout: 25000,
+      env: Object.assign({}, process.env, { PATH: mergedPath }),
     });
   } catch (err) {
     // Non-zero exit: remi prints the JSON error envelope to stderr.
@@ -47,13 +97,14 @@ const REMI_RUNNER_SCRIPT = `
     stdout = err.stdout ? String(err.stdout) : '';
     stderr = err.stderr ? String(err.stderr) : String(err.message || err);
   }
-  return { success: true, stdout, stderr, exitCode };
+  return { success: true, stdout, stderr, exitCode, resolvedBin };
 `;
 
 interface RunnerOutput {
   stdout: string;
   stderr: string;
   exitCode: number;
+  resolvedBin?: string;
 }
 
 const DENIED_MARKER = 'access denied';
@@ -153,8 +204,11 @@ export const runRemi = async <T,>(
     !runner.stdout.trim() &&
     /ENOENT|not found|command not found|spawn/i.test(runner.stderr)
   ) {
+    const triedBin = runner.resolvedBin || bin;
     throw new Error(
-      `Could not run "${bin}". Ensure remi is installed and the path is correct. (${runner.stderr.trim().slice(0, 160)})`,
+      `Could not run "${triedBin}". Ensure remi is installed and the path is correct. ` +
+        `Tip: run "which remi" in a terminal and paste that absolute path into the ` +
+        `"Path to remi binary" field. (${runner.stderr.trim().slice(0, 160)})`,
     );
   }
 

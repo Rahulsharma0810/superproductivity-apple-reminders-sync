@@ -109,6 +109,28 @@ describe('runRemi / parseEnvelope', () => {
     await expect(runRemi(['lists'], '')).rejects.toThrow(/Could not run/i);
   });
 
+  it('ENOENT error includes an actionable "which remi" tip', async () => {
+    mockExec.mockResolvedValueOnce(
+      nodeResult({ stderr: 'spawn remi ENOENT', exitCode: 127 }),
+    );
+    await expect(runRemi(['lists'], '')).rejects.toThrow(/which remi/i);
+  });
+
+  it('ENOENT error names the resolvedBin returned by the runner when present', async () => {
+    mockExec.mockResolvedValueOnce({
+      success: true,
+      result: {
+        stdout: '',
+        stderr: 'spawn /opt/homebrew/bin/remi ENOENT',
+        exitCode: 127,
+        resolvedBin: '/opt/homebrew/bin/remi',
+      },
+    });
+    await expect(runRemi(['lists'], 'remi')).rejects.toThrow(
+      /\/opt\/homebrew\/bin\/remi/,
+    );
+  });
+
   it('throws when the node executor itself reports failure (string error)', async () => {
     mockExec.mockResolvedValueOnce({ success: false, error: 'no consent' });
     await expect(runRemi(['lists'], '')).rejects.toThrow('no consent');

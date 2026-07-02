@@ -434,6 +434,26 @@
           .appendChild(createMappingRow(mapping));
       }
 
+      // Rebuild all mapping rows from their current values. Called after lists
+      // are (re)loaded so the list field switches from a free-text input to a
+      // populated <select> without losing what the user already picked.
+      function renderMappingListOptions() {
+        const container = document.getElementById('mappingsContainer');
+        const current = [];
+        container.querySelectorAll('.mapping-row').forEach((row) => {
+          current.push({
+            projectId: row.querySelector('.mapping-project')?.value || '',
+            reminderListName: row.querySelector('.mapping-list')?.value || '',
+          });
+        });
+        container.innerHTML = '';
+        if (current.length === 0) {
+          addMappingRow();
+        } else {
+          current.forEach((m) => addMappingRow(m));
+        }
+      }
+
       function collectConfig() {
         const mappings = [];
         document.querySelectorAll('#mappingsContainer .mapping-row').forEach((row) => {
@@ -469,7 +489,11 @@
 
       async function loadLists() {
         try {
-          const res = unwrap(await sendMessage({ type: 'getLists' }));
+          // Pass the current (possibly unsaved) form config so a freshly typed
+          // remi binary path is honored before the user clicks Save.
+          const res = unwrap(
+            await sendMessage({ type: 'getLists', config: collectConfig() }),
+          );
           if (res?.success && Array.isArray(res.lists)) {
             lists = res.lists;
             listsPermissionDenied = false;
@@ -512,10 +536,17 @@
 
       async function checkConnection() {
         try {
-          const res = unwrap(await sendMessage({ type: 'healthCheck' }));
+          // Send the current form config so the typed remi path is used even
+          // before Save.
+          const res = unwrap(
+            await sendMessage({ type: 'healthCheck', config: collectConfig() }),
+          );
           const health = res?.health;
           if (!res?.success || !health) {
-            showHealthBanner('Could not run remi. Is it installed?', 'error');
+            showHealthBanner(
+              res?.error || 'Could not run remi. Is it installed?',
+              'error',
+            );
             return;
           }
           if (health.ok && health.permission) {
@@ -538,8 +569,10 @@
       document.getElementById('checkBtn').addEventListener('click', async () => {
         showStatus('Checking connection…', 'info');
         await checkConnection();
-        // Refresh lists after a check in case access was just granted.
+        // Refresh lists after a check in case access was just granted, then
+        // rebuild the mapping rows so the list dropdowns populate.
         await loadLists();
+        renderMappingListOptions();
       });
 
       document.getElementById('syncNowBtn').addEventListener('click', async () => {
@@ -624,8 +657,13 @@
         }
 
         await loadProjects();
-        await loadLists();
+        // Load saved config first so the remi binary path is populated in the
+        // form before we probe for lists / check the connection.
         await loadConfig();
+        await loadLists();
+        // Re-render mapping rows now that lists are available (so the list
+        // dropdowns are populated) without losing the just-loaded config.
+        renderMappingListOptions();
         await checkConnection();
       });
     </script>
