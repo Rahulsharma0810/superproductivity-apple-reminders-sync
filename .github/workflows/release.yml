@@ -1,0 +1,96 @@
+name: Release
+
+# Publishes a prebuilt plugin .zip as a GitHub Release whenever a version tag
+# (e.g. v1.0.0) is pushed. End users download the .zip from the Releases page
+# and load it in SuperProductivity — no git clone or npm required.
+#
+# Cut a release:
+#   1. Bump "version" in package.json AND "version" in src/manifest.json (keep them equal).
+#   2. Commit: `git commit -am "chore: release vX.Y.Z"`
+#   3. Tag + push: `git tag vX.Y.Z && git push origin main vX.Y.Z`
+# The workflow verifies the tag matches the manifest version, builds, tests,
+# packages the zip, and attaches it to a new Release.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # required to create the Release and upload assets
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify tag matches manifest version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          MANIFEST_VERSION="$(node -p "require('./src/manifest.json').version")"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          echo "Tag:      $TAG_VERSION"
+          echo "Manifest: $MANIFEST_VERSION"
+          echo "Package:  $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag ($TAG_VERSION) does not match src/manifest.json version ($MANIFEST_VERSION)."
+            exit 1
+          fi
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag ($TAG_VERSION) does not match package.json version ($PKG_VERSION)."
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Package plugin (.zip)
+        id: package
+        run: |
+          npm run package
+          ZIP_NAME="$(node -p "const m=require('./src/manifest.json'); m.id + '-v' + m.version + '.zip'")"
+          if [ ! -f "$ZIP_NAME" ]; then
+            echo "::error::Expected artifact $ZIP_NAME was not produced."
+            ls -la
+            exit 1
+          fi
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "Built $ZIP_NAME"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.package.outputs.zip_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            ## Apple Reminders Sync — ${{ github.ref_name }}
+
+            Prebuilt plugin for [Super Productivity](https://super-productivity.com).
+
+            ### Install
+            1. Download **`${{ steps.package.outputs.zip_name }}`** below.
+            2. In Super Productivity: **Settings → Plugins → Load plugin from file** and select the downloaded `.zip`.
+            3. Approve the one-time node-execution consent prompt.
+            4. Open the plugin config, enable it, and add a **Project ↔ List** mapping.
+
+            ### Requirements
+            - macOS desktop build of Super Productivity (Electron).
+            - The [`remi`](https://github.com/mattheworiordan/remi) CLI installed (`brew install mattheworiordan/tap/remi`).
+            - Grant **SuperProductivity.app** access under System Settings → Privacy & Security → **Reminders** (and **Full Disk Access** for the tag → section feature), then run `remi authorize`.
+
+            See the [README](https://github.com/Rahulsharma0810/superproductivity-apple-reminders-sync#readme) for the full field-mapping table and troubleshooting.

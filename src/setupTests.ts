@@ -63,7 +63,6 @@ const mockPluginAPI = {
   log: logMock,
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (global as unknown as { PluginAPI: PluginAPIType }).PluginAPI =
   mockPluginAPI as unknown as PluginAPIType;
 

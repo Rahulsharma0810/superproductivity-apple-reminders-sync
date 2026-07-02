@@ -78,15 +78,19 @@ pauses with an actionable snackbar instead of failing silently.
 ## Installing the plugin
 
 This is a standalone, uploadable plugin — no changes to SuperProductivity core
-are required.
+are required. **You do not need to clone this repo or run any build tools.**
 
-1. Build the distributable zip (see [Building](#building)) — or grab a released
-   `sync-reminders-v<version>.zip`.
+1. Go to the [**Releases**](https://github.com/Rahulsharma0810/superproductivity-apple-reminders-sync/releases/latest)
+   page and download the latest **`sync-reminders-v<version>.zip`** from the
+   **Assets** section.
 2. In SuperProductivity: **Settings → Plugins → Load plugin from file** and
-   select the `.zip`.
+   select the downloaded `.zip`.
 3. Approve the Node-execution consent prompt when asked. For uploaded plugins
    this is **ask-once and remembered** for the plugin.
 4. Open the plugin's config screen (its entry in the side menu / plugin list).
+
+> Developers who want to build from source can follow [Building](#building)
+> instead, but this is not required for normal use.
 
 ---
 
@@ -163,14 +167,17 @@ notes back into SP):
 
 ---
 
-## Building
+## Building (for contributors)
+
+Normal users should [install from Releases](#installing-the-plugin) instead —
+this section is only for developing or modifying the plugin.
 
 ```bash
 git clone https://github.com/Rahulsharma0810/superproductivity-apple-reminders-sync.git
 cd superproductivity-apple-reminders-sync
 npm install          # once
 npm run build        # bundle -> dist/plugin.js (+ manifest, index.html, icon)
-npm run package      # zip dist/ -> sync-reminders-v<version>.zip (upload this)
+npm run package      # zip dist/ -> sync-reminders-v<version>.zip
 ```
 
 Other scripts:
@@ -178,6 +185,7 @@ Other scripts:
 ```bash
 npm test             # jest unit tests
 npm run typecheck    # tsc --noEmit
+npm run lint         # eslint
 npm run watch        # rebuild on change
 ```
 
@@ -185,6 +193,35 @@ npm run watch        # rebuild on change
 > global at runtime, so this repo only needs the API's *type declarations*. They
 > live in `types/plugin-api/` and are wired up via a `file:` dependency — no
 > extra build step, nothing fetched from npm for the API surface.
+
+---
+
+## Releasing
+
+Releases are automated by GitHub Actions
+([`.github/workflows/release.yml`](.github/workflows/release.yml)). Pushing a
+version tag builds, tests, packages the `.zip`, and publishes a GitHub Release
+with that `.zip` attached — maintainers never upload artifacts by hand.
+
+1. Bump the version in **both** `package.json` and `src/manifest.json` (keep them
+   equal). The zip name and the release are derived from `src/manifest.json`.
+2. Commit the bump: `git commit -am "chore: release vX.Y.Z"`.
+3. Tag and push:
+
+   ```bash
+   git tag vX.Y.Z
+   git push origin main vX.Y.Z
+   ```
+
+The workflow **fails the release if the tag does not match the manifest/package
+version**, so a mistagged release can't ship. On success, the new
+`sync-reminders-vX.Y.Z.zip` appears on the
+[Releases](https://github.com/Rahulsharma0810/superproductivity-apple-reminders-sync/releases)
+page with auto-generated notes.
+
+Every push to `main` and every pull request also runs
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) (typecheck, lint, test,
+package) to keep `main` releasable.
 
 ---
 
